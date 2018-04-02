@@ -8,10 +8,18 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/splitio/split-synchronizer/conf/v2"
+	yaml "gopkg.in/yaml.v2"
 )
+
+var jsonFileParsed = false
 
 // Data contains all configuration values
 var Data ConfigData
+
+// V2 contains all configuration values from v2 struct
+var V2 v2.Config
 
 // CommandConfigData represent a command line data structure
 type CommandConfigData struct {
@@ -30,6 +38,8 @@ func NewInitializedConfigData() ConfigData {
 // Initialize config module by default
 func Initialize() {
 	Data = getDefaultConfigData()
+	V2 = getDefaultConfigDataV2()
+
 }
 
 func loadFile(path string) {
@@ -38,9 +48,21 @@ func loadFile(path string) {
 		if err != nil {
 			fmt.Println(err.Error())
 		}
-		err = json.Unmarshal(dat, &Data)
-		if err != nil {
-			fmt.Println(err.Error())
+
+		if strings.HasSuffix(path, ".json") {
+			err = json.Unmarshal(dat, &Data)
+			if err != nil {
+				fmt.Println(err.Error())
+			} else {
+				jsonFileParsed = true
+			}
+		}
+
+		if strings.HasSuffix(path, ".yaml") {
+			err := yaml.Unmarshal(dat, &V2)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
 		}
 	}
 }
@@ -162,7 +184,7 @@ func loadFromArgsRecursiveChildren(val reflect.Value, cliParametersMap map[strin
 // LoadFromArgs loads configuration values from cli
 func LoadFromArgs(cliParametersMap map[string]interface{}) {
 	// getting reflection pointer to configuration data struct
-	var configDataReflection = reflect.ValueOf(&Data).Elem()
+	var configDataReflection = reflect.ValueOf(&V2).Elem()
 	loadFromArgsRecursiveChildren(configDataReflection, cliParametersMap)
 }
 
@@ -199,7 +221,7 @@ func cliParametersRecursiveChildren(val reflect.Value) map[string]CommandConfigD
 
 // CliParametersToRegister returns a list of cli parameter struct
 func CliParametersToRegister() map[string]CommandConfigData {
-	var data = getDefaultConfigData()
+	var data = getDefaultConfigDataV2()
 	val := reflect.ValueOf(&data).Elem()
 	return cliParametersRecursiveChildren(val)
 }
@@ -221,6 +243,16 @@ func getDefaultConfigData() ConfigData {
 	// Setting SDK_API_KEY value to write in JSON File when it is exported.
 	// This value MUST be equal to split-default-value set at sections.go
 	configData.Proxy.Auth.APIKeys = append(configData.Proxy.Auth.APIKeys, "SDK_API_KEY")
+	var configDataReflection = reflect.ValueOf(&configData).Elem()
+	loadDefaultValuesRecursiveChildren(configDataReflection)
+	return configData
+}
+
+func getDefaultConfigDataV2() v2.Config {
+	configData := v2.Config{}
+	// Setting SDK_API_KEY value to write in YAML File when it is exported.
+	// This value MUST be equal to split-default-value set at sections.go
+	configData.Proxy.SDKAPIKeys = append(configData.Proxy.SDKAPIKeys, "SDK_API_KEY")
 	var configDataReflection = reflect.ValueOf(&configData).Elem()
 	loadDefaultValuesRecursiveChildren(configDataReflection)
 	return configData
